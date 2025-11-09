@@ -61,7 +61,7 @@ export function AppSidebar() {
             <MessageSquare className="w-5 h-5 text-primary-foreground" />
           </div>
           <h1 className="text-lg font-semibold text-sidebar-foreground" data-testid="text-app-title">
-            Work Console
+            Nexa
           </h1>
         </div>
       </SidebarHeader>

@@ -11,7 +11,7 @@ export function Topbar() {
         <SidebarTrigger data-testid="button-sidebar-toggle" />
         <div>
           <h2 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">
-            {title || "Work Console"}
+            {title || ""}
           </h2>
           {subtitle && (
             <p className="text-sm text-muted-foreground" data-testid="text-page-subtitle">

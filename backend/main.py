@@ -3,7 +3,7 @@ Main FastAPI application for Employee Tracking System.
 """
 from fastapi import FastAPI, Depends, HTTPException, Header, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from typing import Optional, List
 from datetime import date, datetime
 import logging
@@ -94,6 +94,21 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.now().isoformat()
     }
+
+
+@app.get("/api/image.png")
+async def get_timeline_image():
+    """Serve the timeline chart image."""
+    image_path = os.path.join(os.path.dirname(__file__), "api", "image.png")
+    
+    if not os.path.exists(image_path):
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    return FileResponse(
+        image_path,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"}
+    )
 
 
 if __name__ == "__main__":

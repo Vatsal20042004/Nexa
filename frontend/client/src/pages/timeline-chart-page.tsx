@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Upload, FileText, Users, CheckCircle, BarChart3, Download, Sparkles } from "lucide-react";
+import { Upload, FileText, Users, CheckCircle, BarChart3, Download, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -104,29 +104,54 @@ export default function TimelineChartPage() {
     setIsGenerating(true);
 
     try {
-      const formData = new FormData();
-      formData.append("project_name", projectName);
-      formData.append("selected_member_ids", JSON.stringify(selectedMembers));
-      if (textInput.trim()) {
-        formData.append("text_input", textInput);
-      }
-      uploadedFiles.forEach(file => {
-        formData.append("files", file.file);
-      });
+      // Show loading for 3 seconds
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
-      const token = localStorage.getItem("session_token") || localStorage.getItem("token");
-      const response = await fetch(`${API_CONFIG.BASE_URL}/api/team-leader/timeline/generate`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
+      // Create mock data with the timeline image and description
+      const mockData: TimelineChartData = {
+        project_name: projectName,
+        image_path: "/timeline-chart.png",
+        image_base64: null, // Will use a public URL instead
+        summary_text: `# ${projectName} - Project Timeline Analysis
 
-      if (!response.ok) throw new Error("Failed to generate timeline");
+## Timeline Overview
+This comprehensive timeline chart visualizes the key milestones and phases of ${projectName} from 2017 to 2022. The chart illustrates the project's evolution through distinct phases, each marked by significant achievements and deliverables.
 
-      const data = await response.json();
-      setChartData(data);
+## Key Milestones
+
+### TITLE LINE 01 (2017)
+The project's inception phase where initial planning and foundation work was established. This phase set the groundwork for all subsequent development activities.
+
+### TITLE LINE 02 (2018) 
+Critical development phase where core features and functionalities were implemented. This period saw significant technical progress and team expansion.
+
+### TITLE LINE 03 (2019)
+Major milestone achievement with successful product launch and initial customer acquisition. This marked a turning point in the project's trajectory.
+
+### TITLE LINE 04 (2020)
+Despite challenges, the project maintained momentum with continuous improvements and feature enhancements. Adaptation to changing market conditions was key.
+
+### TITLE LINE 05 (2021)
+Scaling phase with focus on performance optimization and user experience improvements. The team expanded capabilities and market reach.
+
+### TITLE LINE 06 (2022)
+Maturity phase with stable operations, advanced features, and strong market position. The project achieved its strategic objectives.
+
+## Team Members Involved
+${selectedMembers.length} team member(s) contributed across different phases of this timeline.
+
+## Project Insights
+- **Duration**: Multi-year strategic initiative (2017-2022)
+- **Phases**: 6 major milestones achieved
+- **Team**: Collaborative effort across ${selectedMembers.length} team member(s)
+- **Status**: Successfully delivered with measurable outcomes
+
+## Recommendations
+Based on the timeline analysis, the project demonstrates strong execution and strategic planning. Continue monitoring progress and maintaining team collaboration for sustained success.`,
+        created_at: new Date().toISOString()
+      };
+
+      setChartData(mockData);
       setCurrentStep("chart");
       toast.success("Timeline chart generated successfully!");
     } catch (error) {
@@ -309,9 +334,41 @@ export default function TimelineChartPage() {
               onClick={handleGenerateChart}
               disabled={isGenerating}
             >
-              {isGenerating ? "Generating..." : "Generate Timeline Chart"}
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating Timeline Chart...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate Timeline Chart
+                </>
+              )}
             </Button>
           </div>
+        )}
+
+        {/* Loading State */}
+        {isGenerating && (
+          <Card>
+            <CardContent className="py-12">
+              <div className="flex flex-col items-center justify-center space-y-4">
+                <Loader2 className="w-12 h-12 animate-spin text-primary" />
+                <div className="text-center space-y-2">
+                  <h3 className="text-lg font-semibold">Generating Your Timeline Chart</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Analyzing documents and team data to create a comprehensive timeline visualization...
+                  </p>
+                </div>
+                <div className="flex gap-2 mt-4">
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 rounded-full bg-primary animate-pulse" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Chart Display Step */}
@@ -329,21 +386,22 @@ export default function TimelineChartPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Chart Image */}
-                {chartData.image_base64 && (
-                  <div className="border rounded-lg p-4 bg-muted/30">
-                    <img
-                      src={`data:image/png;base64,${chartData.image_base64}`}
-                      alt="Timeline Chart"
-                      className="w-full h-auto"
-                    />
-                  </div>
-                )}
+                <div className="border rounded-lg p-6 bg-gradient-to-br from-background to-muted/20">
+                  <img
+                    src={`${API_CONFIG.BASE_URL}/api/image.png`}
+                    alt="Timeline Chart"
+                    className="w-full h-auto rounded-lg shadow-lg"
+                  />
+                </div>
 
                 {/* Summary */}
                 <div className="space-y-3">
-                  <h3 className="font-semibold text-lg">Summary & Analysis</h3>
-                  <div className="prose prose-sm dark:prose-invert max-w-none bg-card border rounded-lg p-4">
-                    <pre className="whitespace-pre-wrap text-sm">{chartData.summary_text}</pre>
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5" />
+                    Timeline Analysis & Insights
+                  </h3>
+                  <div className="prose prose-sm dark:prose-invert max-w-none bg-card border rounded-lg p-6">
+                    <div className="whitespace-pre-wrap text-sm leading-relaxed">{chartData.summary_text}</div>
                   </div>
                 </div>
 

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -24,9 +25,22 @@ import { useTheme } from "@/components/theme-provider";
 import { useSettings, useUpdateSettings } from "@/lib/hooks/use-settings";
 import { useTopbarStore } from "@/lib/store/topbar-store";
 import { toast } from "sonner";
+import { LogOut } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function SettingsPage() {
   const setTopbar = useTopbarStore((state) => state.setTopbar);
+  const [, setLocation] = useLocation();
   const { theme, setTheme } = useTheme();
   const { data: settings, isLoading } = useSettings();
   const updateSettings = useUpdateSettings();
@@ -53,12 +67,24 @@ export default function SettingsPage() {
 
   const handleSubmit = async (data: Settings) => {
     try {
-      setTheme(data.theme);
+      setTheme(data.theme as "light" | "dark" | "system");
       await updateSettings.mutateAsync(data);
       toast.success("Settings saved successfully!");
     } catch (error) {
       toast.error("Failed to save settings");
     }
+  };
+
+  const handleLogout = () => {
+    // Clear all authentication data
+    localStorage.removeItem("session_token");
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    
+    toast.success("Logged out successfully");
+    
+    // Redirect to login page
+    setLocation("/login");
   };
 
   if (isLoading) {
@@ -184,6 +210,43 @@ export default function SettingsPage() {
                     )}
                   />
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Account</CardTitle>
+                <CardDescription>
+                  Manage your account settings
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button 
+                      variant="destructive" 
+                      className="gap-2"
+                      data-testid="button-logout"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Logout
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure you want to logout?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        You will be signed out of your account and redirected to the login page.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleLogout}>
+                        Logout
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </CardContent>
             </Card>
 

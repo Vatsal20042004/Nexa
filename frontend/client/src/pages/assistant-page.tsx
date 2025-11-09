@@ -25,12 +25,15 @@ interface AttachedFile {
 }
 
 const suggestions = [
-  "Write a first draft",
-  "Get advice",
-  "Learn something new",
-  "Create an image",
-  "Make a plan"
+  "What tasks do I have today?",
+  "Help me plan my week",
+  "Show my recent activity",
+  "What should I focus on?",
+  "Review my progress"
 ];
+
+// API configuration
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function AssistantPage() {
   const setTopbar = useTopbarStore((state) => state.setTopbar);
@@ -40,6 +43,7 @@ export default function AssistantPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const [responseMode, setResponseMode] = useState("precise");
+  const [sessionId, setSessionId] = useState<string>("");
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +51,8 @@ export default function AssistantPage() {
 
   useEffect(() => {
     setTopbar("AI Assistant", "Your intelligent productivity companion");
+    // Generate unique session ID
+    setSessionId(`chat_${Date.now()}`);
   }, [setTopbar]);
 
   useEffect(() => {
@@ -80,27 +86,6 @@ export default function AssistantPage() {
     }
   }, []);
 
-  const simulateStreaming = async (text: string) => {
-    const words = text.split(" ");
-    let currentText = "";
-
-    const messageId = Date.now().toString();
-    setMessages((prev) => [
-      ...prev,
-      { id: messageId, role: "assistant", content: "" },
-    ]);
-
-    for (let i = 0; i < words.length; i++) {
-      currentText += (i > 0 ? " " : "") + words[i];
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId ? { ...msg, content: currentText } : msg
-        )
-      );
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isStreaming) return;
@@ -116,16 +101,59 @@ export default function AssistantPage() {
     setAttachedFiles([]);
     setIsStreaming(true);
 
-    const responses = [
-      "I understand you're working on that task. Based on your calendar, you have a meeting scheduled in 2 hours. Would you like me to help you prepare?",
-      "I've analyzed your task list and found 3 high-priority items due this week. Would you like me to create a focused plan for completing them?",
-      "Great question! Based on your project timeline, I recommend focusing on the design phase first, then moving to implementation. This approach aligns with your team's availability.",
-      "I can help with that. Let me check your schedule and suggest the best time slots for this task based on your working hours and existing commitments.",
-    ];
+    try {
+      // Get session token
+      const sessionToken = localStorage.getItem("session_token") || localStorage.getItem("token");
+      
+      if (!sessionToken) {
+        toast.error("Please login to use the assistant");
+        setIsStreaming(false);
+        return;
+      }
 
-    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-    await simulateStreaming(randomResponse);
-    setIsStreaming(false);
+      // Call backend API
+      const response = await fetch(`${API_URL}/api/chat/message`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          message: input.trim()
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to get response");
+      }
+
+      const data = await response.json();
+      
+      // Add assistant response
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: data.response,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+      
+    } catch (error: any) {
+      console.error("Chat error:", error);
+      toast.error(error.message || "Failed to send message");
+      
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "I apologize, but I encountered an error processing your request. Please try again.",
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsStreaming(false);
+    }
   };
 
   const handleSuggestionClick = (suggestion: string) => {

@@ -16,6 +16,10 @@ from datetime import datetime
 router = APIRouter()
 unified_service = UnifiedService()
 
+# Gemini API configuration - use Gemini instead of Ollama
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY", "AIzaSyDv1IIfdNbpy9C1cCFYEYmejjjgI2bbvQg")
+
 # Path to user chat system prompt
 USER_CHAT_PROMPT = os.path.join(
     os.path.dirname(__file__), 
@@ -30,18 +34,94 @@ async def send_chat_message(
 ):
     """
     Send a chat message and get AI response.
-    Uses the chat system prompt for user interactions.
+    Uses the chat system prompt for user interactions with Gemini API.
     """
     try:
         # Create session_id that includes user_id for isolation
         full_session_id = f"user_{current_user['id']}_{chat_request.session_id}"
         
-        # Call unified service chat
+        # Get user context - recent tasks, sessions, etc.
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        
+        context_parts = []
+        
+        # Get user's recent tasks
+        cursor.execute("""
+            SELECT title, description, status, priority, due_date
+            FROM tasks
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 10
+        """, (current_user['id'],))
+        
+        tasks = cursor.fetchall()
+        if tasks:
+            context_parts.append("\n## User's Recent Tasks:")
+            for task in tasks:
+                task_dict = dict(task)
+                context_parts.append(
+                    f"- [{task_dict['status']}] {task_dict['title']} "
+                    f"(Priority: {task_dict['priority']}, Due: {task_dict['due_date']})"
+                )
+        
+        # Get user's recent sessions
+        cursor.execute("""
+            SELECT date, status, github_username
+            FROM daily_sessions
+            WHERE user_id = ?
+            ORDER BY date DESC
+            LIMIT 5
+        """, (current_user['id'],))
+        
+        sessions = cursor.fetchall()
+        if sessions:
+            context_parts.append("\n## Recent Work Sessions:")
+            for session in sessions:
+                session_dict = dict(session)
+                context_parts.append(
+                    f"- {session_dict['date']}: {session_dict['status']}"
+                )
+        
+        conn.close()
+        
+        user_context = "\n".join(context_parts)
+        
+        # Read system instruction
+        try:
+            with open(USER_CHAT_PROMPT, 'r', encoding='utf-8') as f:
+                system_instruction = f.read()
+        except:
+            system_instruction = "You are a helpful AI assistant for employee productivity."
+        
+        # Add user context to the system instruction
+        full_prompt = f"{system_instruction}\n\n## Current User Context:\n{user_context}"
+        
+        # Call unified service chat with Gemini
         response_text = unified_service.chat(
             session_id=full_session_id,
             user_message=chat_request.message,
-            system_prompt_file=USER_CHAT_PROMPT if os.path.exists(USER_CHAT_PROMPT) else None
+            system_prompt_file=None,  # We'll pass the prompt directly via model params
+            model_name=GEMINI_MODEL,
+            api_key=GEMINI_API_KEY,
+            history_limit=20
         )
+        
+        # Store chat messages in database
+        cursor = db.get_connection().cursor()
+        
+        cursor.execute("""
+            INSERT INTO chat_messages (user_id, session_id, role, message)
+            VALUES (?, ?, 'user', ?)
+        """, (current_user['id'], full_session_id, chat_request.message))
+        
+        cursor.execute("""
+            INSERT INTO chat_messages (user_id, session_id, role, message)
+            VALUES (?, ?, 'assistant', ?)
+        """, (current_user['id'], full_session_id, response_text))
+        
+        cursor.connection.commit()
+        cursor.connection.close()
         
         db.log_audit(
             current_user['id'], 

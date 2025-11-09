@@ -221,63 +221,185 @@ async def team_leader_chat(
     conn = db.get_connection()
     cursor = conn.cursor()
     
-    # Build context from mentioned members
-    context_parts = []
+    # Get ALL team members for this team leader
+    cursor.execute("""
+        SELECT tm.member_user_id, u.name, u.username, u.role, u.work_hours, u.comments
+        FROM team_members tm
+        JOIN users u ON tm.member_user_id = u.id
+        WHERE tm.team_leader_id = ?
+        ORDER BY u.name
+    """, (current_user['id'],))
     
-    for member_id in request.mentioned_members:
-        # Get member info
-        cursor.execute("""
-            SELECT u.name, u.username, u.role
-            FROM users u
-            WHERE u.id = ?
-        """, (member_id,))
+    all_members = cursor.fetchall()
+    
+    # Build comprehensive context
+    context_parts = []
+    context_parts.append("# TEAM OVERVIEW")
+    context_parts.append(f"Total Team Members: {len(all_members)}")
+    context_parts.append("")
+    
+    # Process each team member
+    for member_row in all_members:
+        member = dict(member_row)
+        member_id = member['member_user_id']
         
-        member = cursor.fetchone()
-        if not member:
-            continue
+        # Check if this member is specifically mentioned
+        is_mentioned = member_id in (request.mentioned_members or [])
         
-        member_dict = dict(member)
-        context_parts.append(f"\n## Team Member: {member_dict['name']} (@{member_dict['username']})")
-        context_parts.append(f"Role: {member_dict['role']}")
+        context_parts.append(f"\n{'='*60}")
+        context_parts.append(f"## Team Member: {member['name']} (@{member['username']})")
+        if is_mentioned:
+            context_parts.append("**[MENTIONED IN CURRENT QUERY]**")
+        context_parts.append(f"Role: {member['role']}")
+        context_parts.append(f"Work Hours: {member['work_hours']}")
+        if member['comments']:
+            context_parts.append(f"Notes: {member['comments']}")
         
         # Get tasks
         cursor.execute("""
-            SELECT title, description, status, priority, due_date
+            SELECT title, description, status, priority, due_date, created_at
             FROM tasks
             WHERE user_id = ?
-            ORDER BY created_at DESC
-            LIMIT 10
+            ORDER BY 
+                CASE status 
+                    WHEN 'in_progress' THEN 1
+                    WHEN 'pending' THEN 2
+                    WHEN 'completed' THEN 3
+                    ELSE 4
+                END,
+                due_date ASC
+            LIMIT 15
         """, (member_id,))
         
         tasks = cursor.fetchall()
         if tasks:
-            context_parts.append("\n### Recent Tasks:")
+            context_parts.append("\n### Tasks:")
+            
+            # Group by status
+            pending_tasks = []
+            in_progress_tasks = []
+            completed_tasks = []
+            
             for task in tasks:
                 task_dict = dict(task)
-                context_parts.append(
-                    f"- [{task_dict['status']}] {task_dict['title']} "
+                task_line = (
+                    f"- [{task_dict['status'].upper()}] {task_dict['title']} "
                     f"(Priority: {task_dict['priority']}, Due: {task_dict['due_date']})"
                 )
+                if task_dict.get('description'):
+                    task_line += f"\n  Description: {task_dict['description'][:200]}"
+                
+                if task_dict['status'] == 'in_progress':
+                    in_progress_tasks.append(task_line)
+                elif task_dict['status'] == 'pending':
+                    pending_tasks.append(task_line)
+                elif task_dict['status'] == 'completed':
+                    completed_tasks.append(task_line)
+            
+            if in_progress_tasks:
+                context_parts.append("\n#### In Progress:")
+                context_parts.extend(in_progress_tasks)
+            
+            if pending_tasks:
+                context_parts.append("\n#### Pending:")
+                context_parts.extend(pending_tasks)
+            
+            if completed_tasks:
+                context_parts.append("\n#### Recently Completed:")
+                context_parts.extend(completed_tasks[:5])  # Limit completed tasks
+        else:
+            context_parts.append("\n### Tasks: No tasks found")
         
-        # Get contexts (PDFs, meetings, etc.)
+        # Get daily sessions
         cursor.execute("""
-            SELECT context_type, title, content
-            FROM team_member_contexts
-            WHERE member_user_id = ?
-            ORDER BY created_at DESC
+            SELECT date, status, github_username, github_repo, submitted_at
+            FROM daily_sessions
+            WHERE user_id = ?
+            ORDER BY date DESC
+            LIMIT 7
+        """, (member_id,))
+        
+        sessions = cursor.fetchall()
+        if sessions:
+            context_parts.append("\n### Recent Work Sessions:")
+            for session in sessions:
+                session_dict = dict(session)
+                session_line = f"- {session_dict['date']}: {session_dict['status'].upper()}"
+                if session_dict.get('github_username'):
+                    session_line += f" (GitHub: {session_dict['github_username']}"
+                    if session_dict.get('github_repo'):
+                        session_line += f"/{session_dict['github_repo']}"
+                    session_line += ")"
+                if session_dict.get('submitted_at'):
+                    session_line += f" [Submitted: {session_dict['submitted_at']}]"
+                context_parts.append(session_line)
+        
+        # Get uploaded files/transcripts for recent sessions
+        cursor.execute("""
+            SELECT ds.date, t.filename, t.upload_type, t.content
+            FROM transcripts t
+            JOIN daily_sessions ds ON t.session_id = ds.id
+            WHERE ds.user_id = ?
+            ORDER BY t.uploaded_at DESC
             LIMIT 5
         """, (member_id,))
         
-        contexts = cursor.fetchall()
-        if contexts:
-            context_parts.append("\n### Additional Context:")
-            for ctx in contexts:
-                ctx_dict = dict(ctx)
-                context_parts.append(f"- [{ctx_dict['context_type']}] {ctx_dict['title']}")
-                if ctx_dict['content']:
-                    # Limit content to first 500 chars
-                    content_preview = ctx_dict['content'][:500]
-                    context_parts.append(f"  {content_preview}...")
+        transcripts = cursor.fetchall()
+        if transcripts:
+            context_parts.append("\n### Recent Transcripts/Documents:")
+            for transcript in transcripts:
+                trans_dict = dict(transcript)
+                trans_line = f"- {trans_dict['date']}: {trans_dict['filename']} ({trans_dict.get('upload_type', 'general')})"
+                if trans_dict.get('content'):
+                    # Show preview of content
+                    content_preview = trans_dict['content'][:300].replace('\n', ' ')
+                    trans_line += f"\n  Preview: {content_preview}..."
+                context_parts.append(trans_line)
+        
+        # Get additional contexts (PDFs, meetings, etc.) if mentioned
+        if is_mentioned:
+            cursor.execute("""
+                SELECT context_type, title, content, created_at
+                FROM team_member_contexts
+                WHERE member_user_id = ?
+                ORDER BY created_at DESC
+                LIMIT 5
+            """, (member_id,))
+            
+            contexts = cursor.fetchall()
+            if contexts:
+                context_parts.append("\n### Additional Context (Documents/Notes):")
+                for ctx in contexts:
+                    ctx_dict = dict(ctx)
+                    ctx_line = f"- [{ctx_dict['context_type']}] {ctx_dict['title']} ({ctx_dict['created_at']})"
+                    if ctx_dict.get('content'):
+                        # Limit content preview
+                        content_preview = ctx_dict['content'][:500].replace('\n', ' ')
+                        ctx_line += f"\n  {content_preview}..."
+                    context_parts.append(ctx_line)
+    
+    # Add team-wide statistics
+    context_parts.append(f"\n{'='*60}")
+    context_parts.append("# TEAM STATISTICS")
+    
+    cursor.execute("""
+        SELECT 
+            COUNT(DISTINCT t.id) as total_tasks,
+            SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+            SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks,
+            SUM(CASE WHEN t.status = 'pending' THEN 1 ELSE 0 END) as pending_tasks,
+            SUM(CASE WHEN t.priority = 'urgent' THEN 1 ELSE 0 END) as urgent_tasks
+        FROM tasks t
+        JOIN team_members tm ON t.user_id = tm.member_user_id
+        WHERE tm.team_leader_id = ?
+    """, (current_user['id'],))
+    
+    stats = dict(cursor.fetchone())
+    context_parts.append(f"Total Tasks: {stats['total_tasks']}")
+    context_parts.append(f"Completed: {stats['completed_tasks']}")
+    context_parts.append(f"In Progress: {stats['in_progress_tasks']}")
+    context_parts.append(f"Pending: {stats['pending_tasks']}")
+    context_parts.append(f"Urgent: {stats['urgent_tasks']}")
     
     context = "\n".join(context_parts)
     
