@@ -1,0 +1,189 @@
+PROJECT TITLE:
+
+Copilot-Style Work Console (Calendar + Task Planner + Chat Assistant + Announcements)
+
+OBJECTIVE
+
+Build a modern, modular, industry-grade frontend application that functions as a productivity and task intelligence workspace.
+The UI experience should resemble Microsoft Copilot / Windows 11 Productivity Panels, not a traditional to-do list.
+
+The application must strictly follow:
+
+Separation of concerns
+
+Modular component hierarchy
+
+Reusable UI patterns
+
+Clean state management
+
+Consistent coding conventions
+
+Accessible interactions
+
+Scalable structure for future backend integration
+
+TECH STACK (Required)
+Layer	Technology
+Framework	Next.js (App Router) + TypeScript
+Styling	TailwindCSS + shadcn/ui + Radix UI Primitives
+UI Components	shadcn/ui library (Do not build UI raw; use components)
+State	Zustand (UI + filters + selections)
+Data Fetch / Caching	React Query
+Calendar	FullCalendar (day/week/month + drag/drop)
+Heatmap	react-calendar-heatmap
+Theme	next-themes
+Markdown Rendering	react-markdown + remark-gfm
+Notifications	sonner
+Chat	Collapsible side panel w/ streaming mock LLM output
+Icons	lucide-react
+CODE QUALITY REQUIREMENTS (MANDATORY)
+
+You MUST follow these rules:
+
+1. Separation of Concerns
+
+UI components ≠ business / logic
+
+State stores ≠ UI rendering logic
+
+Pages only assemble components; do not compute logic there
+
+All data must flow via React Query hooks or Zustand stores
+
+2. Component Structure
+
+Every component must:
+
+Have its own folder
+
+Have an index.tsx + types.ts (if needed)
+
+Not exceed 150 lines per file unless absolutely required
+
+3. Naming Conventions
+
+Components = PascalCase
+
+Hooks = useCamelCase
+
+State stores = useStoreName
+
+Files = kebab-case.tsx
+
+4. Code Style
+
+Prettier & ESLint enabled
+
+Avoid inline CSS; use Tailwind utilities
+
+Keep layout wrappers in containers, not mixed with logic
+
+Functions should be pure & predictable
+
+5. Accessibility
+
+Keyboard navigation & ARIA labels required
+
+Dark/light theme contrast must meet WCAG AA
+
+CORE FEATURES TO IMPLEMENT
+Feature	Description
+Calendar Workspace	Google Calendar-style day/week/month switch, event drag & resize, selectable time to create tasks
+Task Board	Not a checklist — tasks shown as cards with priority chips, progress state, filters & project context
+Priority + Status Filters	Multi-select filtering across board & calendar
+Heatmap Activity Overview	Displays task completion/engagement over recent days
+Announcements Panel	Live notifications like "X assigned a new task in Y project"
+Projects Dropdown + Project Overview Page	Show project metadata (lead, deadline, members, status progress)
+Theme + Settings Page	Dark/light/system mode, working hours, calendar density controls
+Chat Assistant Panel	Collapsible Copilot-style panel, streams mock LLM replies, uses Markdown formatting
+PROJECT STRUCTURE (STRICTLY FOLLOW THIS)
+src/
+  app/
+    layout.tsx
+    page.tsx                          # Dashboard
+    calendar/page.tsx
+    tasks/page.tsx
+    announcements/page.tsx
+    settings/page.tsx
+    projects/page.tsx
+    projects/[id]/page.tsx
+    api/ (optional mock API endpoints)
+
+  components/
+    layout/
+      Sidebar/
+      Topbar/
+    calendar/
+      CalendarBoard/
+      HeatmapStrip/
+    tasks/
+      TaskCard/
+      TaskList/
+      TaskFilters/
+      TaskSheet/                      # Create/edit modal
+    announcements/
+      AnnouncementList/
+    projects/
+      ProjectOverview/
+    chatbot/
+      ChatDock/
+    ui/                               # shadcn generated UI primitives
+
+  lib/
+    store/                            # Zustand stores
+    hooks/                            # Shared hooks
+    query/                            # React Query setup
+    mock/                             # Mock data, fake sockets
+    utils/                            # Color mapping, date formatting
+
+  types/
+    index.ts                          # Shared data types
+
+MOCK DATA (USE THIS EXACT MODEL)
+export type Priority = "high" | "medium" | "low";
+export type Status = "pending" | "in_progress" | "done";
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  projectId: string;
+  assignee: string;
+  priority: Priority;
+  status: Status;
+  start: string;
+  end: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  lead: string;
+  deadline: string;
+  description?: string;
+}
+
+export interface Announcement {
+  id: string;
+  projectId?: string;
+  title: string;
+  body: string;
+  from: string;
+  createdAt: string;
+  type?: "task_assigned" | "general";
+}
+
+DELIVERABLE REQUIREMENTS
+
+The final product must run immediately with:
+
+npm install
+npm run dev
+
+
+No hard-coded temp UI
+
+No inline styling hacks
+
+No tightly coupled state inside UI components

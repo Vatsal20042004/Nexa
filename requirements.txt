@@ -1,0 +1,37 @@
+langchain
+langchain_core
+pydantic
+langchain-ollama
+langchain-google-genai
+PyMuPDF==1.22.5          # fitz - PDF reading
+python-docx==0.8.11      # docx reading
+pandas==2.2.2            # csv reading if needed (lightweight usage)
+PyYAML==6.0              # yaml parsing
+markdown==3.4.4          # optional parsing of md to text
+tomli==2.0.1 
+pyautogui
+easyocr
+Pillow
+
+# FastAPI Backend Requirements
+
+# Web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Data validation
+pydantic==2.5.0
+
+# Database
+# SQLite3 is built into Python, no additional package needed
+
+# Video processing
+opencv-python==4.8.1.78
+opencv-python
+# CORS and middleware
+python-jose[cryptography]==3.3.0
+
+# Utilities
+python-dateutil==2.8.2
+requests==2.31.0
